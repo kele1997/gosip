@@ -31,6 +31,7 @@ const (
 type Target struct {
 	Host string
 	Port *sip.Port
+	Path string
 }
 
 func (trg *Target) Addr() string {
@@ -47,6 +48,10 @@ func (trg *Target) Addr() string {
 
 	if trg.Port != nil {
 		port = *trg.Port
+	}
+
+	if len(trg.Path) != 0 {
+		return fmt.Sprintf("%v:%v/%s", host, port, trg.Path)
 	}
 
 	return fmt.Sprintf("%v:%v", host, port)
@@ -71,7 +76,18 @@ func NewTarget(host string, port int) *Target {
 }
 
 func NewTargetFromAddr(addr string) (*Target, error) {
-	host, port, err := net.SplitHostPort(addr)
+	var hostaddr string
+	var path string
+	if strings.Contains(addr, "/") {
+		// split the path from addr
+		s := strings.Split(addr, "/")
+		if len(s) > 2 {
+			return nil, errors.New("addr is not right")
+		}
+		hostaddr = s[0]
+		path = s[1]
+	}
+	host, port, err := net.SplitHostPort(hostaddr)
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +95,10 @@ func NewTargetFromAddr(addr string) (*Target, error) {
 	if err != nil {
 		return nil, err
 	}
-	return NewTarget(host, iport), nil
+
+	target := NewTarget(host, iport)
+	target.Path = path
+	return target, nil
 }
 
 // Fills endpoint target with default values.
