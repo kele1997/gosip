@@ -1,6 +1,7 @@
 package transport
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
@@ -63,4 +64,75 @@ func NewWssProtocol(
 	go p.pipePools()
 
 	return p
+}
+
+func (p *wssProtocol) Send(target *Target, msg sip.Message) error {
+	target = FillTargetHostAndPort(p.Network(), target)
+
+	//validate remote address
+	if target.Host == "" {
+		return &ProtocolError{
+			fmt.Errorf("empty remote target host"),
+			fmt.Sprintf("send SIP message to %s %s", p.Network(), target.Addr()),
+			fmt.Sprintf("%p", p),
+		}
+	}
+
+	//find or create connection
+	conn, err := p.getOrCreateConnection(target)
+	if err != nil {
+		return &ProtocolError{
+			Err:      err,
+			Op:       fmt.Sprintf("get or create %s connection", p.Network()),
+			ProtoPtr: fmt.Sprintf("%p", p),
+		}
+	}
+
+	logger := log.AddFieldsFrom(p.Log(), conn, msg)
+	logger.Tracef("writing SIP message to %s %s", p.Network(), target)
+
+	//send message
+	_, err = conn.Write([]byte(msg.String()))
+	if err != nil {
+		err = &ProtocolError{
+			Err:      err,
+			Op:       fmt.Sprintf("write SIP message to the %s connection", conn.Key()),
+			ProtoPtr: fmt.Sprintf("%p", p),
+		}
+	}
+
+	return err
+}
+
+func (p *wssProtocol) getOrCreateConnection(target *Target) (Connection, error) {
+	key := ConnectionKey(p.network + ":" + target.Addr())
+	conn, err := p.connections.Get(key)
+	if err != nil {
+		p.Log().Debugf("connection for address %s %s not found; create a new one", p.Network(), target.Addr())
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		url := fmt.Sprintf("%s://%s", p.network, target.Addr())
+		baseConn, _, _, err := p.dialer.Dial(ctx, url)
+		if err == nil {
+			baseConn = &wsConn{
+				Conn:   baseConn,
+				client: true,
+			}
+		} else {
+			if baseConn == nil {
+				return nil, fmt.Errorf("dial to %s %s: %w", p.Network(), target.Addr(), err)
+			}
+
+			p.Log().Warnf("fallback to TCP connection due to WS upgrade error: %s", err)
+		}
+
+		conn = NewConnection(baseConn, key, p.network, p.Log())
+
+		if err := p.connections.Put(conn, sockTTL); err != nil {
+			return conn, fmt.Errorf("put %s connection to the pool: %w", conn.Key(), err)
+		}
+	}
+
+	return conn, nil
 }
