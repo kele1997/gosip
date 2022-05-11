@@ -31,6 +31,8 @@ type Layer interface {
 	String() string
 	IsReliable(network string) bool
 	IsStreamed(network string) bool
+
+	SetWsHeader(key, value string) error
 }
 
 var protocolFactory ProtocolFactory = func(
@@ -133,6 +135,31 @@ func (tpl *layer) String() string {
 
 func (tpl *layer) Log() log.Logger {
 	return tpl.log
+}
+
+func (tpl *layer) SetWsHeader(key, value string) error {
+	var ok1, ok2 bool
+
+	if ws, ok1 := tpl.protocols.get("ws"); ok1 {
+		wsp, ok := ws.(*wsProtocol)
+		if !ok {
+			// can't happend
+			return errors.New("unexpected error")
+		}
+		wsp.SetWsHeader(key, value)
+	}
+
+	if wss, ok2 := tpl.protocols.get("wss"); ok2 {
+		wssp, ok := wss.(*wssProtocol)
+		if !ok {
+			return errors.New("unexpected error")
+		}
+		wssp.SetWsHeader(key, value)
+	}
+	if !ok1 && !ok2 {
+		return errors.New("don't have ws or wss protocol")
+	}
+	return nil
 }
 
 func (tpl *layer) Cancel() {

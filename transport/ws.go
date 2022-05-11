@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"strings"
 	"time"
 
@@ -113,6 +114,7 @@ type wsProtocol struct {
 	listen      func(addr *net.TCPAddr, options ...ListenOption) (net.Listener, error)
 	resolveAddr func(addr string) (*net.TCPAddr, error)
 	dialer      ws.Dialer
+	header      http.Header
 }
 
 func NewWsProtocol(
@@ -298,4 +300,9 @@ func (p *wsProtocol) getOrCreateConnection(raddr *net.TCPAddr) (Connection, erro
 	}
 
 	return conn, nil
+}
+
+func (p *wsProtocol) SetWsHeader(key, value string) {
+	p.header.Add(key, value)
+	p.dialer.Header = ws.HandshakeHeaderHTTP(p.header)
 }

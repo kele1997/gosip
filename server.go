@@ -43,6 +43,8 @@ type Server interface {
 		reason, body string,
 		headers []sip.Header,
 	) (sip.ServerTransaction, error)
+
+	SetWsHeader(key, value string) error
 }
 
 type TransportLayerFactory func(
@@ -165,6 +167,10 @@ func NewServer(
 
 func (srv *server) Log() log.Logger {
 	return srv.log
+}
+
+func (srv *server) SetWsHeader(key, value string) error {
+	return srv.tp.SetWsHeader(key, value)
 }
 
 // ListenAndServe starts serving listeners on the provided address
