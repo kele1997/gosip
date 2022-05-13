@@ -83,9 +83,13 @@ func NewTargetFromAddr(addr string) (*Target, error) {
 		s := strings.Split(addr, "/")
 		if len(s) > 2 {
 			return nil, errors.New("addr is not right")
+		} else if len(s) == 1 {
+			hostaddr = s[0]
+			path = "/"
+		} else {
+			hostaddr = s[0]
+			path = s[1]
 		}
-		hostaddr = s[0]
-		path = s[1]
 	}
 	host, port, err := net.SplitHostPort(hostaddr)
 	if err != nil {

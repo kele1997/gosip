@@ -59,6 +59,7 @@ func NewWssProtocol(
 		VerifyPeerCertificate: func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
 			return nil
 		},
+		InsecureSkipVerify: true,
 	}
 	//pipe listener and connection pools
 	go p.pipePools()

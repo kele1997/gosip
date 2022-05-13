@@ -234,17 +234,17 @@ func (p *wsProtocol) Send(target *Target, msg sip.Message) error {
 		}
 	}
 	//resolve remote address
-	raddr, err := p.resolveAddr(target.Addr())
-	if err != nil {
-		return &ProtocolError{
-			err,
-			fmt.Sprintf("resolve target address %s %s", p.Network(), target.Addr()),
-			fmt.Sprintf("%p", p),
-		}
-	}
+	// raddr, err := p.resolveAddr(target.Addr())
+	// if err != nil {
+	// 	return &ProtocolError{
+	// 		err,
+	// 		fmt.Sprintf("resolve target address %s %s", p.Network(), target.Addr()),
+	// 		fmt.Sprintf("%p", p),
+	// 	}
+	// }
 
 	//find or create connection
-	conn, err := p.getOrCreateConnection(raddr)
+	conn, err := p.getOrCreateConnection(target)
 	if err != nil {
 		return &ProtocolError{
 			Err:      err,
@@ -254,7 +254,7 @@ func (p *wsProtocol) Send(target *Target, msg sip.Message) error {
 	}
 
 	logger := log.AddFieldsFrom(p.Log(), conn, msg)
-	logger.Tracef("writing SIP message to %s %s", p.Network(), raddr)
+	logger.Tracef("writing SIP message to %s %s", p.Network(), target.Addr())
 
 	//send message
 	_, err = conn.Write([]byte(msg.String()))
@@ -269,15 +269,15 @@ func (p *wsProtocol) Send(target *Target, msg sip.Message) error {
 	return err
 }
 
-func (p *wsProtocol) getOrCreateConnection(raddr *net.TCPAddr) (Connection, error) {
-	key := ConnectionKey(p.network + ":" + raddr.String())
+func (p *wsProtocol) getOrCreateConnection(target *Target) (Connection, error) {
+	key := ConnectionKey(p.network + ":" + target.Addr())
 	conn, err := p.connections.Get(key)
 	if err != nil {
-		p.Log().Debugf("connection for address %s %s not found; create a new one", p.Network(), raddr)
+		p.Log().Debugf("connection for address %s %s not found; create a new one", p.Network(), target.Addr())
 
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
-		url := fmt.Sprintf("%s://%s", p.network, raddr)
+		url := fmt.Sprintf("%s://%s", p.network, target.Addr())
 		baseConn, _, _, err := p.dialer.Dial(ctx, url)
 		if err == nil {
 			baseConn = &wsConn{
@@ -286,7 +286,7 @@ func (p *wsProtocol) getOrCreateConnection(raddr *net.TCPAddr) (Connection, erro
 			}
 		} else {
 			if baseConn == nil {
-				return nil, fmt.Errorf("dial to %s %s: %w", p.Network(), raddr, err)
+				return nil, fmt.Errorf("dial to %s %s: %w", p.Network(), target.Addr(), err)
 			}
 
 			p.Log().Warnf("fallback to TCP connection due to WS upgrade error: %s", err)
